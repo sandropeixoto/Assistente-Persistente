@@ -1,135 +1,128 @@
 <?php
-// api.php
-header('Content-Type: application/json');
-header("Access-Control-Allow-Origin: *");
+// 1. INÍCIO DA LIMPEZA (Captura tudo que o PHP tentar falar)
+ob_start();
 
+// Configurações básicas
+set_time_limit(120);
+ini_set('display_errors', 0); // Não mostra erros na tela
+error_reporting(E_ALL); // Registra erros no log interno
+
+session_start();
+require 'db.php';
+require 'tools.php';
 $config = require 'config.php';
 
+// Função auxiliar para pegar debug (Segura contra falhas)
+function get_debug_safe($pdo, $uid) {
+    try {
+        $f = $pdo->prepare("SELECT key, value FROM facts WHERE user_id=?");
+        $f->execute([$uid]);
+        $t = $pdo->prepare("SELECT description FROM tasks WHERE user_id=? AND status='pending'");
+        $t->execute([$uid]);
+        return ['facts' => $f->fetchAll(PDO::FETCH_ASSOC), 'tasks' => $t->fetchAll(PDO::FETCH_COLUMN)];
+    } catch (Exception $e) { return ['facts'=>[], 'tasks'=>[]]; }
+}
+
+// Lógica Principal
+$response = [];
+
 try {
-    $pdo = new PDO('sqlite:database.sqlite');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Tabelas (mesmas de antes)
-    $pdo->exec("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT)");
-
-    // Auto-população (mesma lógica anterior...)
-    $stmt = $pdo->query("SELECT count(*) FROM facts");
-    if ($stmt->fetchColumn() == 0) {
-        $initialFacts = [
-            'nome' => 'Desenvolvedor',
-            'cargo' => 'Senior Dev na SEFA/PA',
-            'veiculo' => 'BYD Dolphin'
-        ]; // (Resumido para o exemplo, mantenha o seu completo)
-        $insert = $pdo->prepare("INSERT INTO facts (key, value) VALUES (:k, :v)");
-        foreach ($initialFacts as $k => $v) $insert->execute([':k' => $k, ':v' => $v]);
+    // Auth Check
+    if (!isset($_SESSION['user_id'])) {
+        http_response_code(401);
+        throw new Exception("Sessão expirada");
     }
-
+    
+    $uid = $_SESSION['user_id'];
     $method = $_SERVER['REQUEST_METHOD'];
 
-    // --- GET: Carregar Tudo ---
+    // --- GET (Carregar Chat) ---
     if ($method === 'GET') {
-        // 1. Mensagens
-        $stmtMsg = $pdo->query("SELECT role, content, timestamp FROM messages ORDER BY id ASC");
-        $messages = $stmtMsg->fetchAll(PDO::FETCH_ASSOC);
+        if (isset($_GET['logout'])) { session_destroy(); exit; }
 
-        // 2. Fatos (Memória Permanente)
-        $stmtFacts = $pdo->query("SELECT * FROM facts");
-        $facts = $stmtFacts->fetchAll(PDO::FETCH_ASSOC);
+        $msgs = $pdo->prepare("SELECT role, content FROM messages WHERE user_id=? ORDER BY id ASC");
+        $msgs->execute([$uid]);
+        
+        $dbg = get_debug_safe($pdo, $uid);
 
-        echo json_encode([
-            'messages' => $messages,
-            'facts' => $facts,
-            'debug_mode' => $config['debug_mode']
-        ]);
-        exit;
+        $response = [
+            'email' => $_SESSION['email'],
+            'messages' => $msgs->fetchAll(PDO::FETCH_ASSOC),
+            'debug_mode' => $config['debug_mode'],
+            'debug_facts' => $dbg['facts'],
+            'debug_tasks' => $dbg['tasks']
+        ];
     }
 
-    // --- POST: Chat ---
+    // --- POST (Enviar Mensagem) ---
     if ($method === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true);
-        $userMessage = $input['message'] ?? '';
-        if (empty($userMessage)) throw new Exception("Mensagem vazia.");
-
+        $msg = $input['message'] ?? '';
+        
         // 1. Salvar User
-        $stmt = $pdo->prepare("INSERT INTO messages (role, content) VALUES ('user', :content)");
-        $stmt->execute([':content' => $userMessage]);
+        $pdo->prepare("INSERT INTO messages (user_id, role, content) VALUES (?, 'user', ?)")->execute([$uid, $msg]);
 
-        // 2. Carregar Contexto Permanente
-        $stmt = $pdo->query("SELECT value FROM facts");
-        $factsList = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $personaText = "### PERFIL:\n" . implode("\n- ", $factsList);
-
-        // 3. RAG (Busca de memória antiga)
-        $ragLog = "Nenhuma memória antiga relevante encontrada.";
-        preg_match_all('/\b\w{4,}\b/u', $userMessage, $matches);
-        $keywords = $matches[0];
-        $longTermMemory = "";
-
-        if (!empty($keywords)) {
-            $clauses = []; $params = [];
-            foreach ($keywords as $i => $word) {
-                if (in_array(strtolower($word), ['para', 'como', 'quem'])) continue;
-                $clauses[] = "content LIKE :word$i";
-                $params[":word$i"] = "%$word%";
-            }
-            if (!empty($clauses)) {
-                $sqlRAG = "SELECT role, content FROM messages WHERE (" . implode(' OR ', $clauses) . ") AND id < (SELECT MAX(id) FROM messages) - :limit ORDER BY id DESC LIMIT 3";
-                $stmtRAG = $pdo->prepare($sqlRAG);
-                $params[':limit'] = $config['context_limit'];
-                foreach ($params as $k => $v) $stmtRAG->bindValue($k, $v);
-                $stmtRAG->bindValue(':limit', $config['context_limit'], PDO::PARAM_INT);
-                $stmtRAG->execute();
-                $ragResults = $stmtRAG->fetchAll(PDO::FETCH_ASSOC);
-                
-                if ($ragResults) {
-                    $longTermMemory = "\n### MEMÓRIA RECUPERADA:\n";
-                    $ragLog = "Memórias recuperadas:\n"; // Para o Debug
-                    foreach (array_reverse($ragResults) as $mem) {
-                        $longTermMemory .= "- [{$mem['role']}]: {$mem['content']}\n";
-                        $ragLog .= "- [{$mem['role']}]: " . substr($mem['content'], 0, 50) . "...\n";
-                    }
-                }
-            }
+        // 2. Contexto
+        $dbg = get_debug_safe($pdo, $uid);
+        $persona = "FATOS CONHECIDOS:\n";
+        foreach($dbg['facts'] as $f) $persona .= "- {$f['key']}: {$f['value']}\n";
+        
+        // RAG Simples
+        preg_match_all('/\b\w{4,}\b/u', $msg, $m);
+        $rag = "";
+        if(!empty($m[0])) {
+            $sql = "SELECT content FROM messages WHERE user_id=$uid AND content LIKE ? LIMIT 3";
+            $st = $pdo->prepare($sql); $st->execute(['%'.$m[0][0].'%']);
+            foreach($st->fetchAll() as $r) $rag .= "- " . substr($r['content'],0,100) . "...\n";
         }
 
-        // 4. Montar Payload
-        $limit = $config['context_limit'];
-        $stmt = $pdo->prepare("SELECT role, content FROM messages ORDER BY id DESC LIMIT :limit");
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        $history = array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC));
-
-        $finalSystemPrompt = $personaText . $longTermMemory . "\nSeja direto.";
-        array_unshift($history, ['role' => 'system', 'content' => $finalSystemPrompt]);
-
-        // 5. Chamada API
-        $ch = curl_init($config['api_url']);
-        $payload = json_encode(['model' => $config['model'], 'messages' => $history, 'temperature' => 0.4]);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_HTTPHEADER => ["Content-Type: application/json", "Authorization: Bearer " . $config['api_key']]
-        ]);
-        $response = curl_exec($ch);
-        curl_close($ch);
+        // 3. Prompt
+        $sys = "Você é Jarvis.\n$persona\nContexto Antigo:\n$rag\nResponda curto.";
+        $hist = [['role'=>'system','content'=>$sys]];
         
-        $data = json_decode($response, true);
-        $botReply = $data['choices'][0]['message']['content'] ?? 'Erro API';
+        // Histórico Recente
+        $st = $pdo->prepare("SELECT role, content FROM messages WHERE user_id=? ORDER BY id DESC LIMIT 5");
+        $st->execute([$uid]);
+        foreach(array_reverse($st->fetchAll(PDO::FETCH_ASSOC)) as $h) {
+            $hist[] = ['role'=>$h['role'], 'content'=>$h['content']];
+        }
 
-        // 6. Salvar Assistente
-        $stmt = $pdo->prepare("INSERT INTO messages (role, content) VALUES ('assistant', :content)");
-        $stmt->execute([':content' => $botReply]);
-
-        // Retorna a resposta E os dados de debug
-        echo json_encode([
-            'reply' => $botReply,
-            'debug_rag' => $ragLog,
-            'debug_used_keywords' => implode(", ", $keywords)
+        // 4. API Call
+        $ch = curl_init($config['api_url']);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER=>true, CURLOPT_POST=>true,
+            CURLOPT_POSTFIELDS=>json_encode(['model'=>$config['model'], 'messages'=>$hist]),
+            CURLOPT_HTTPHEADER=>["Content-Type: application/json", "Authorization: Bearer ".$config['api_key']],
+            CURLOPT_SSL_VERIFYPEER=>false
         ]);
-        exit;
+        $apiRes = curl_exec($ch);
+        $apiData = json_decode($apiRes, true);
+        $reply = $apiData['choices'][0]['message']['content'] ?? 'Sem resposta da IA';
+
+        // 5. Salvar Bot
+        $pdo->prepare("INSERT INTO messages (user_id, role, content) VALUES (?, 'assistant', ?)")->execute([$uid, $reply]);
+        
+        // Dados frescos para atualizar a tela
+        $newDbg = get_debug_safe($pdo, $uid);
+        
+        $response = [
+            'reply' => $reply,
+            'debug_facts' => $newDbg['facts']
+        ];
     }
+
 } catch (Exception $e) {
+    // Se der erro, prepara resposta de erro JSON
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    $response = ['error' => $e->getMessage()];
 }
+
+// 2. LIMPEZA FINAL (O Pulo do Gato)
+// Descarta qualquer aviso/texto que o PHP tenha gerado até agora
+ob_end_clean();
+
+// 3. ENTREGA PURA
+header('Content-Type: application/json');
+echo json_encode($response);
+exit;
 ?>

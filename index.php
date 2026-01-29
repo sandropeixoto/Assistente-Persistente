@@ -1,167 +1,255 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assistente Pessoal + Debug</title>
+    <title>Jarvis AI - Bootstrap</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
     <style>
-        :root { --bg: #f0f2f5; --chat-bg: #fff; --user-msg: #007bff; --bot-msg: #e4e6eb; --debug-bg: #1e1e1e; --debug-text: #00ff00; }
-        body { font-family: sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
-        /* Layout Principal */
-        .app-container { display: flex; width: 100%; height: 100%; }
+        /* Área do Chat */
+        #chat-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; background-color: #212529; }
         
-        /* Área do Chat (Esquerda) */
-        .chat-section { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); box-shadow: 0 0 20px rgba(0,0,0,0.1); }
-        header { padding: 15px; border-bottom: 1px solid #ddd; font-weight: bold; background: #fff; display: flex; justify-content: space-between; }
-        #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-        .input-area { padding: 20px; border-top: 1px solid #ddd; display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; }
-        button { padding: 10px 25px; background: var(--user-msg); color: white; border: none; border-radius: 25px; cursor: pointer; }
+        /* Balões de Mensagem */
+        .msg-bubble { max-width: 80%; padding: 12px 18px; border-radius: 15px; margin-bottom: 15px; position: relative; font-size: 0.95rem; line-height: 1.5; }
+        .msg-user { background-color: #0d6efd; color: white; border-bottom-right-radius: 2px; align-self: flex-end; margin-left: auto; }
+        .msg-bot { background-color: #343a40; color: #e9ecef; border: 1px solid #495057; border-bottom-left-radius: 2px; align-self: flex-start; margin-right: auto; }
+        
+        /* Sidebar de Debug */
+        .debug-sidebar { width: 320px; border-left: 1px solid #495057; background-color: #1a1d20; font-family: 'Consolas', monospace; font-size: 0.85rem; overflow-y: auto; }
+        .debug-card { background-color: #212529; border: 1px solid #343a40; margin-bottom: 10px; }
+        .debug-key { color: #6ea8fe; font-weight: bold; }
+        .debug-val { color: #adb5bd; }
 
-        /* Mensagens */
-        .message { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
-        .message.user { align-self: flex-end; background: var(--user-msg); color: white; }
-        .message.assistant { align-self: flex-start; background: var(--bot-msg); color: #000; }
-        .message.system { align-self: center; font-size: 12px; color: #888; }
-
-        /* Área de Debug (Direita) */
-        .debug-section { width: 350px; background: var(--debug-bg); color: var(--debug-text); display: none; flex-direction: column; font-family: 'Courier New', monospace; font-size: 12px; border-left: 1px solid #333; }
-        .debug-header { padding: 15px; background: #2d2d2d; font-weight: bold; border-bottom: 1px solid #333; color: #fff; }
-        .debug-content { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 20px; }
-        
-        .debug-block h4 { color: #fff; margin: 0 0 5px 0; border-bottom: 1px solid #444; padding-bottom: 3px; }
-        .fact-item { margin-bottom: 4px; color: #ccc; }
-        .fact-key { color: #ff79c6; font-weight: bold; }
-        .log-entry { margin-bottom: 10px; border-bottom: 1px dashed #444; padding-bottom: 5px; }
-        .log-time { color: #888; font-size: 10px; }
+        /* Digitando... */
+        .typing-indicator { display: none; color: #adb5bd; font-style: italic; font-size: 0.8rem; margin-bottom: 10px; margin-left: 10px; }
     </style>
 </head>
 <body>
 
-<div class="app-container">
-    <div class="chat-section">
-        <header>
-            <span>Assistente Pessoal</span>
-            <span id="status-badge" style="font-size:12px; color: green;">Online</span>
-        </header>
-        <div id="chat-box"></div>
-        <div class="input-area">
-            <input type="text" id="user-input" placeholder="Digite..." autocomplete="off">
-            <button id="send-btn">Enviar</button>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="bi bi-robot"></i> Jarvis AI</a>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-secondary small" id="user-email-display"></span>
+                <button class="btn btn-outline-danger btn-sm" onclick="logout()">Sair</button>
+            </div>
         </div>
-    </div>
+    </nav>
 
-    <div class="debug-section" id="debug-sidebar">
-        <div class="debug-header">🛠️ Debug & Monitoramento</div>
-        <div class="debug-content">
+    <div class="d-flex flex-grow-1 overflow-hidden">
+        
+        <main class="d-flex flex-column flex-grow-1 position-relative">
+            <div id="chat-container" class="d-flex flex-column p-4">
+                </div>
             
-            <div class="debug-block">
-                <h4>Memória Permanente (Facts)</h4>
-                <div id="facts-list">Carregando...</div>
+            <div id="typing" class="typing-indicator">Jarvis está pensando...</div>
+
+            <div class="p-3 bg-dark border-top border-secondary">
+                <div class="input-group">
+                    <input type="text" id="user-input" class="form-control" placeholder="Digite sua mensagem..." autocomplete="off">
+                    <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">
+                        <i class="bi bi-send-fill"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <aside id="debug-panel" class="debug-sidebar p-3 d-none">
+            <h6 class="text-uppercase text-secondary fw-bold mb-3 border-bottom border-secondary pb-2">
+                <i class="bi bi-cpu"></i> Painel Neural
+            </h6>
+
+            <div class="mb-4">
+                <small class="text-success text-uppercase fw-bold"><i class="bi bi-database"></i> Memória (Facts)</small>
+                <div id="debug-facts" class="mt-2 d-flex flex-column gap-2"></div>
             </div>
 
-            <div class="debug-block">
-                <h4>Log de Decisão (Última Ação)</h4>
-                <div id="decision-log" style="color: #f1fa8c;">Aguardando interação...</div>
+            <div class="mb-4">
+                <small class="text-warning text-uppercase fw-bold"><i class="bi bi-tools"></i> Tools Activity</small>
+                <div id="debug-tools" class="mt-2">
+                    <span class="text-muted fst-italic">Nenhuma ação recente.</span>
+                </div>
             </div>
 
-        </div>
+            <div class="mb-4">
+                <small class="text-info text-uppercase fw-bold"><i class="bi bi-search"></i> Contexto (RAG)</small>
+                <div id="debug-rag" class="mt-2">
+                    <span class="text-muted fst-italic">Nenhuma memória antiga usada.</span>
+                </div>
+            </div>
+            
+             <div class="mb-4">
+                <small class="text-danger text-uppercase fw-bold"><i class="bi bi-list-check"></i> Tarefas</small>
+                <div id="debug-tasks" class="mt-2 d-flex flex-column gap-2"></div>
+            </div>
+        </aside>
     </div>
-</div>
 
-<script>
-    const chatBox = document.getElementById('chat-box');
-    const userInput = document.getElementById('user-input');
-    const sendBtn = document.getElementById('send-btn');
-    const debugSidebar = document.getElementById('debug-sidebar');
-    const factsList = document.getElementById('facts-list');
-    const decisionLog = document.getElementById('decision-log');
-
-    // Carregar dados iniciais
-    async function loadData() {
-        try {
-            const res = await fetch('api.php');
-            const data = await res.json();
-            
-            // Renderiza mensagens
-            chatBox.innerHTML = '';
-            if(data.messages) {
-                data.messages.forEach(msg => appendMessage(msg.role, msg.content));
-            }
-
-            // Ativa Debug se config for true
-            if(data.debug_mode) {
-                debugSidebar.style.display = 'flex';
-                renderFacts(data.facts);
-            }
-
-        } catch (e) { console.error(e); }
-    }
-
-    function renderFacts(facts) {
-        factsList.innerHTML = '';
-        facts.forEach(fact => {
-            const div = document.createElement('div');
-            div.className = 'fact-item';
-            div.innerHTML = `<span class="fact-key">${fact.key}:</span> ${fact.value}`;
-            factsList.appendChild(div);
-        });
-    }
-
-    function appendMessage(role, text) {
-        const div = document.createElement('div');
-        div.classList.add('message', role);
-        div.innerHTML = text.replace(/\n/g, '<br>');
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    async function sendMessage() {
-        const text = userInput.value.trim();
-        if (!text) return;
-
-        appendMessage('user', text);
-        userInput.value = '';
-        userInput.disabled = true;
-
-        try {
-            const res = await fetch('api.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text })
-            });
-            const data = await res.json();
-            
-            if (data.error) throw new Error(data.error);
-            
-            appendMessage('assistant', data.reply);
-
-            // ATUALIZA LOG DE DEBUG
-            if (debugSidebar.style.display !== 'none') {
-                const time = new Date().toLocaleTimeString();
-                decisionLog.innerHTML = `
-                    <div class="log-entry">
-                        <div class="log-time">[${time}] Envio do Usuário</div>
-                        <div>Keywords: ${data.debug_used_keywords || 'Nenhuma'}</div>
-                        <div style="margin-top:5px; color:#ccc">${data.debug_rag}</div>
+    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Login</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="auth-email" class="form-control">
                     </div>
-                ` + decisionLog.innerHTML;
-            }
+                    <div class="mb-3">
+                        <label class="form-label">Senha</label>
+                        <input type="password" id="auth-pass" class="form-control">
+                    </div>
+                    <div id="auth-error" class="text-danger small mb-3"></div>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="authAction()">Entrar / Registrar</button>
+                        <button class="btn btn-link text-decoration-none" onclick="toggleAuthMode()" id="toggle-auth-btn">Não tem conta? Crie uma.</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        } catch (err) {
-            appendMessage('system', 'Erro: ' + err.message);
-        } finally {
-            userInput.disabled = false;
-            userInput.focus();
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Variáveis de Estado
+        let isRegister = false;
+        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const typingIndicator = document.getElementById('typing');
+
+        // --- Lógica de Auth ---
+        function showLogin() { loginModal.show(); }
+        
+        function toggleAuthMode() {
+            isRegister = !isRegister;
+            document.getElementById('modalTitle').innerText = isRegister ? 'Nova Conta' : 'Login';
+            document.getElementById('toggle-auth-btn').innerText = isRegister ? 'Já tenho conta. Login.' : 'Não tem conta? Crie uma.';
+            document.getElementById('auth-error').innerText = '';
         }
-    }
 
-    sendBtn.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+        async function authAction() {
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-pass').value;
+            const action = isRegister ? 'register' : 'login';
 
-    loadData();
-</script>
+            try {
+                const res = await fetch('auth.php', { method: 'POST', body: JSON.stringify({ action, email, password }) });
+                const data = await res.json();
 
-</body>
-</html>
+                if (data.success) {
+                    loginModal.hide();
+                    loadChat();
+                } else {
+                    document.getElementById('auth-error').innerText = data.error;
+                }
+            } catch (e) {
+                document.getElementById('auth-error').innerText = "Erro de conexão.";
+            }
+        }
+        async function loadChat() {
+            try {
+                console.log("Iniciando carregamento..."); // Debug
+                const res = await fetch('api.php');
+                
+                // Se der erro de autenticação, mostra login
+                if (res.status === 401) {
+                    console.log("Não autorizado (401). Mostrando login.");
+                    return showLogin(); 
+                }
+
+                // Tenta ler o texto bruto antes do JSON para ver se tem erro PHP
+                const rawText = await res.text();
+                console.log("Resposta bruta do servidor:", rawText);
+
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (e) {
+                    console.error("Erro ao processar JSON. O servidor retornou HTML/Erro?", e);
+                    // Mostra alerta visual se o JSON estiver quebrado
+                    document.getElementById('chat-container').innerHTML = `<div class="alert alert-danger">Erro no servidor: Verifique o console (F12).</div>`;
+                    return;
+                }
+
+                // Se chegou aqui, o JSON é válido. Renderiza.
+                document.getElementById('user-email-display').innerText = data.email || 'Usuário';
+                
+                // Renderiza Mensagens
+                const container = document.getElementById('chat-container');
+                container.innerHTML = '';
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach(msg => appendMessage(msg.role, msg.content));
+                } else {
+                    container.innerHTML = '<div class="text-muted text-center mt-5">Nenhuma conversa encontrada.</div>';
+                }
+
+                // Renderiza Debug
+                if (data.debug_mode) {
+                    document.getElementById('debug-panel').classList.remove('d-none');
+                    updateDebugPanel(data);
+                }
+                
+                scrollToBottom();
+
+            } catch (e) {
+                console.error("Erro fatal no loadChat:", e);
+            }
+        }
+
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = `msg-bubble ${role === 'user' ? 'msg-user' : 'msg-bot'}`;
+            // Converte quebras de linha em <br> e formata markdown simples se necessário
+            div.innerHTML = text.replace(/\n/g, '<br>');
+            chatContainer.appendChild(div);
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            appendMessage('user', text);
+            userInput.value = '';
+            userInput.disabled = true;
+            scrollToBottom();
+            
+            // Mostra "Digitando..."
+            typingIndicator.style.display = 'block';
+
+            try {
+                const res = await fetch('api.php', { method: 'POST', body: JSON.stringify({ message: text }) });
+                const data = await res.json();
+
+                if (data.error) {
+                    appendMessage('assistant', "⚠️ Erro: " + data.error);
+                } else {
+                    appendMessage('assistant', data.reply);
+                    updateDebugPanel(data); // Atualiza lateral com dados frescos
+                }
+            } catch (e) {
+                appendMessage('assistant', "Erro fatal de conexão.");
+            } finally {
+                userInput.disabled = false;
+                typingIndicator.style.display = 'none';
+                userInput.focus();
+                scrollToBottom();
+            }
+        }
+
+        // --- Lógica de Atualização do Debug ---
+        function updateDebugPanel(data) {
+            // Facts
+            const factsDiv = document.getElementById('debug-facts');
+            if (data.debug_facts && data.debug_facts.length > 0) {
+                factsDiv.
