@@ -1,72 +1,72 @@
-# Assistente Pessoal com Memória Persistente
+Assistente Persistente
+======================
+Uma base simples para um chatbot com memória persistente em PHP puro, SQLite e JavaScript.
 
-Este é um projeto simples de um Chatbot com memória persistente, desenvolvido em PHP puro (sem frameworks), SQLite e JavaScript. Ele permite conversar com modelos de linguagem (LLMs) como Llama 3 (via Ollama) ou modelos da OpenAI, mantendo o histórico da conversa salvo em um banco de dados local.
+Visão geral
+-----------
+- Linguagem: PHP 7.4+
+- Banco de dados: SQLite
+- Frontend: HTML/CSS/JS
+- Conector de IA: Ollama (LLMs locais) ou OpenAI (via API)
 
-## Funcionalidades
+Recursos
+--------
+- Memória Persistente: histórico salvo em database.sqlite
+- Contexto Configurável: envio das últimas mensagens para manter o contexto
+- Interface simples: frontend direto
+- Compatível com APIs OpenAI/OLLama/OpenRouter etc.
 
-- **Memória Persistente**: O histórico do chat é salvo em um banco de dados SQLite (`database.sqlite`), permitindo que a conversa continue mesmo após recarregar a página.
-- **Contexto Configurável**: O sistema envia as últimas `X` mensagens para a IA, garantindo que ela entenda o contexto recente sem estourar o limite de tokens.
-- **Interface Simples**: Frontend limpo e responsivo em HTML/CSS/JS.
-- **Agnóstico de API**: Compatível com APIs que seguem o padrão OpenAI (Ollama, OpenRouter, OpenAI, etc.).
+Pré-requisitos
+--------------
+- PHP 7.4 ou superior
+- Extensões PHP: pdo_sqlite, curl
+- Um backend de IA ativo (Ollama local ou chave OpenAI)
 
-## Pré-requisitos
+Instalação
+----------
+1. Clone ou baixe o repositório para seu ambiente
+2. Edite config.php para apontar a API e o modelo desejado
+3. Garanta permissões de escrita para o diretório (criando database.sqlite na primeira execução)
 
-- PHP 7.4 ou superior.
-- Extensões PHP habilitadas:
-  - `pdo_sqlite` (para o banco de dados)
-  - `curl` (para requisições à API)
-- Um servidor de API de LLM (ex: Ollama rodando localmente ou uma chave da OpenAI).
+Configuração (exemplos)
+-------------------------
+Configuração básica para Ollama (local):
+```php
+return [
+  'api_base_url' => 'http://localhost:11434/v1',
+  'api_key'      => 'ollama',
+  'model'        => 'llama3',
+  'context_limit'=> 10
+];
+```
+Configuração para OpenAI (exemplo):
+```php
+return [
+  'api_base_url' => 'https://api.openai.com/v1',
+  'api_key'      => 'sk-...'
+  'model'        => 'gpt-4o-mini',
+  'context_limit'=> 10
+];
+```
 
-## Instalação e Configuração
+Execução
+--------
+1. No terminal, rode o servidor embutido do PHP (para teste):
+```
+php -S localhost:8000
+```
+2. Acesse: http://localhost:8000
 
-1. **Clone ou baixe o repositório** para uma pasta local.
+Arquivos-chave
+---------------
+- index.php: frontend
+- api.php: backend (DB + IA)
+- config.php: configuração central
+- database.sqlite: banco criado na primeira execução
 
-2. **Configure o ambiente:**
-   Edite o arquivo `config.php` para definir a URL da API e o modelo desejado.
+Notas
+-----
+- O botão de limpar apenas afeta a visualização; o histórico permanece no banco para manter contexto.
+- Este código é recomendado apenas para desenvolvimento/local; para produção, implemente autenticação/validações de segurança adequadas.
 
-   Exemplo para **Ollama** (Local):
-   ```php
-   return [
-       'api_base_url' => 'http://localhost:11434/v1',
-       'api_key' => 'ollama', // Geralmente ignorado localmente
-       'model' => 'llama3',   // Certifique-se de ter baixado o modelo: ollama pull llama3
-       'context_limit' => 10
-   ];
-   ```
-
-   Exemplo para **OpenAI**:
-   ```php
-   return [
-       'api_base_url' => 'https://api.openai.com/v1',
-       'api_key' => 'sk-sua-chave-aqui',
-       'model' => 'gpt-4o-mini',
-       'context_limit' => 10
-   ];
-   ```
-
-3. **Permissões:**
-   Certifique-se de que o diretório do projeto tem permissão de escrita, pois o script criará o arquivo `database.sqlite` automaticamente na primeira execução.
-
-## Como Executar
-
-Você pode usar o servidor embutido do PHP para testar rapidamente.
-
-1. Abra o terminal na pasta do projeto.
-2. Execute o comando:
-   ```bash
-   php -S localhost:8000
-   ```
-3. Acesse no navegador:
-   http://localhost:8000
-
-## Estrutura de Arquivos
-
-- `index.php`: Interface do usuário (Frontend).
-- `api.php`: Backend que gerencia o banco de dados e comunica com a IA.
-- `config.php`: Arquivo de configuração central.
-- `database.sqlite`: Banco de dados gerado automaticamente (contém a tabela `messages`).
-
-## Notas
-
-- **Limpeza do Chat**: O botão "Limpar" na interface atual limpa apenas a visualização no navegador. O histórico permanece no banco de dados para manter o contexto.
-- **Segurança**: Este código é destinado a uso local ou de desenvolvimento. Para produção, recomenda-se adicionar autenticação e validações de segurança mais robustas.
+Observação: este README reflete o estado atual do repositório existente em /root/.openclaw/workspace/repos/Assistente-Persistente. Se desejar, posso estender com guias de contribuição, testes, ou scripts de setup automatizados.
