@@ -1,11 +1,10 @@
 <?php
 try {
-    // Cria/Conecta ao banco SQLite
-    // Em produção (nuvem), garanta permissão de escrita na pasta
+    // Conexão SQLite
     $pdo = new PDO('sqlite:database.sqlite');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // 1. Tabela de Usuários
+    // 1. Tabela Usuários
     $pdo->exec("CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
@@ -13,7 +12,7 @@ try {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
-    // 2. Tabela de Mensagens (Vinculada ao User)
+    // 2. Mensagens
     $pdo->exec("CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -23,7 +22,7 @@ try {
         FOREIGN KEY(user_id) REFERENCES users(id)
     )");
 
-    // 3. Tabela de Fatos/Persona (Memória Estática)
+    // 3. Fatos (Memória)
     $pdo->exec("CREATE TABLE IF NOT EXISTS facts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -33,17 +32,16 @@ try {
         FOREIGN KEY(user_id) REFERENCES users(id)
     )");
 
-    // 4. Tabela de Tarefas (Para Function Calling)
+    // 4. Tarefas
     $pdo->exec("CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         description TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )");
 
 } catch (Exception $e) {
-    die("Erro fatal de banco de dados: " . $e->getMessage());
+    die("Erro DB: " . $e->getMessage());
 }
 ?>

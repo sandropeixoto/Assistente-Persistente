@@ -1,255 +1,141 @@
+<?php
+// CONFIGURAÇÃO DE SESSÃO (Deve ser igual ao auth_action)
+ini_set('session.gc_maxlifetime', 86400);
+session_set_cookie_params(['lifetime' => 86400, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax']);
+session_start();
+
+// PROTEÇÃO: Se não estiver logado, redireciona para login
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="pt-BR" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jarvis AI - Bootstrap</title>
+    <title>Jarvis AI</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    
     <style>
-        body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        
-        /* Área do Chat */
-        #chat-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; background-color: #212529; }
-        
-        /* Balões de Mensagem */
-        .msg-bubble { max-width: 80%; padding: 12px 18px; border-radius: 15px; margin-bottom: 15px; position: relative; font-size: 0.95rem; line-height: 1.5; }
-        .msg-user { background-color: #0d6efd; color: white; border-bottom-right-radius: 2px; align-self: flex-end; margin-left: auto; }
-        .msg-bot { background-color: #343a40; color: #e9ecef; border: 1px solid #495057; border-bottom-left-radius: 2px; align-self: flex-start; margin-right: auto; }
-        
-        /* Sidebar de Debug */
-        .debug-sidebar { width: 320px; border-left: 1px solid #495057; background-color: #1a1d20; font-family: 'Consolas', monospace; font-size: 0.85rem; overflow-y: auto; }
-        .debug-card { background-color: #212529; border: 1px solid #343a40; margin-bottom: 10px; }
-        .debug-key { color: #6ea8fe; font-weight: bold; }
-        .debug-val { color: #adb5bd; }
-
-        /* Digitando... */
-        .typing-indicator { display: none; color: #adb5bd; font-style: italic; font-size: 0.8rem; margin-bottom: 10px; margin-left: 10px; }
+        body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; background-color: #121212; }
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+        #chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+        #messages-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+        .msg { max-width: 85%; padding: 12px 18px; border-radius: 18px; font-size: 0.95rem; line-height: 1.5; word-wrap: break-word; }
+        .msg-user { background-color: #0d6efd; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .msg-bot { background-color: #2c3035; color: #e9ecef; align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #3a3f45; }
+        #debug-sidebar { width: 300px; background-color: #1a1d20; border-left: 1px solid #343a40; padding: 15px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 0.85rem; display: none; }
+        .input-area { background-color: #1a1d20; padding: 20px; border-top: 1px solid #343a40; }
+        .debug-title { text-transform: uppercase; font-weight: bold; font-size: 0.75rem; color: #adb5bd; margin-bottom: 10px; display: block; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#"><i class="bi bi-robot"></i> Jarvis AI</a>
-            <div class="d-flex align-items-center gap-3">
-                <span class="text-secondary small" id="user-email-display"></span>
-                <button class="btn btn-outline-danger btn-sm" onclick="logout()">Sair</button>
-            </div>
-        </div>
-    </nav>
-
-    <div class="d-flex flex-grow-1 overflow-hidden">
-        
-        <main class="d-flex flex-column flex-grow-1 position-relative">
-            <div id="chat-container" class="d-flex flex-column p-4">
-                </div>
-            
-            <div id="typing" class="typing-indicator">Jarvis está pensando...</div>
-
-            <div class="p-3 bg-dark border-top border-secondary">
-                <div class="input-group">
-                    <input type="text" id="user-input" class="form-control" placeholder="Digite sua mensagem..." autocomplete="off">
-                    <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">
-                        <i class="bi bi-send-fill"></i> Enviar
-                    </button>
-                </div>
-            </div>
-        </main>
-
-        <aside id="debug-panel" class="debug-sidebar p-3 d-none">
-            <h6 class="text-uppercase text-secondary fw-bold mb-3 border-bottom border-secondary pb-2">
-                <i class="bi bi-cpu"></i> Painel Neural
-            </h6>
-
-            <div class="mb-4">
-                <small class="text-success text-uppercase fw-bold"><i class="bi bi-database"></i> Memória (Facts)</small>
-                <div id="debug-facts" class="mt-2 d-flex flex-column gap-2"></div>
-            </div>
-
-            <div class="mb-4">
-                <small class="text-warning text-uppercase fw-bold"><i class="bi bi-tools"></i> Tools Activity</small>
-                <div id="debug-tools" class="mt-2">
-                    <span class="text-muted fst-italic">Nenhuma ação recente.</span>
-                </div>
-            </div>
-
-            <div class="mb-4">
-                <small class="text-info text-uppercase fw-bold"><i class="bi bi-search"></i> Contexto (RAG)</small>
-                <div id="debug-rag" class="mt-2">
-                    <span class="text-muted fst-italic">Nenhuma memória antiga usada.</span>
-                </div>
-            </div>
-            
-             <div class="mb-4">
-                <small class="text-danger text-uppercase fw-bold"><i class="bi bi-list-check"></i> Tarefas</small>
-                <div id="debug-tasks" class="mt-2 d-flex flex-column gap-2"></div>
-            </div>
-        </aside>
-    </div>
-
-    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalTitle">Login</h5>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" id="auth-email" class="form-control">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Senha</label>
-                        <input type="password" id="auth-pass" class="form-control">
-                    </div>
-                    <div id="auth-error" class="text-danger small mb-3"></div>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary" onclick="authAction()">Entrar / Registrar</button>
-                        <button class="btn btn-link text-decoration-none" onclick="toggleAuthMode()" id="toggle-auth-btn">Não tem conta? Crie uma.</button>
-                    </div>
-                </div>
-            </div>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
+    <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="#"><i class="bi bi-cpu-fill text-primary"></i> Jarvis AI</a>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-secondary small"><?php echo htmlspecialchars($_SESSION['email']); ?></span>
+            <a href="api.php?logout=1" class="btn btn-outline-danger btn-sm">Sair</a>
         </div>
     </div>
+</nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<div class="main-container">
+    <main id="chat-area">
+        <div id="messages-box"></div>
+        <div id="typing-indicator" class="px-4 pb-2 text-muted small fst-italic" style="display:none;">Jarvis está pensando...</div>
+        <div class="input-area">
+            <div class="input-group">
+                <input type="text" id="user-input" class="form-control bg-dark text-light border-secondary" placeholder="Digite sua mensagem..." autocomplete="off">
+                <button class="btn btn-primary" onclick="sendMessage()"><i class="bi bi-send-fill"></i></button>
+            </div>
+        </div>
+    </main>
 
-    <script>
-        // Variáveis de Estado
-        let isRegister = false;
-        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-        const chatContainer = document.getElementById('chat-container');
-        const userInput = document.getElementById('user-input');
-        const typingIndicator = document.getElementById('typing');
+    <aside id="debug-sidebar">
+        <div class="mb-4">
+            <span class="debug-title">Memória</span>
+            <div id="debug-facts"><em class="text-muted">Carregando...</em></div>
+        </div>
+        <div>
+            <span class="debug-title">Tarefas</span>
+            <div id="debug-tasks"></div>
+        </div>
+    </aside>
+</div>
 
-        // --- Lógica de Auth ---
-        function showLogin() { loginModal.show(); }
-        
-        function toggleAuthMode() {
-            isRegister = !isRegister;
-            document.getElementById('modalTitle').innerText = isRegister ? 'Nova Conta' : 'Login';
-            document.getElementById('toggle-auth-btn').innerText = isRegister ? 'Já tenho conta. Login.' : 'Não tem conta? Crie uma.';
-            document.getElementById('auth-error').innerText = '';
-        }
+<script>
+    const msgBox = document.getElementById('messages-box');
 
-        async function authAction() {
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-pass').value;
-            const action = isRegister ? 'register' : 'login';
+    async function initChat() {
+        try {
+            const res = await fetch('api.php');
+            if (res.redirected || res.status === 401) { window.location.href = 'login.php'; return; }
+            
+            const txt = await res.text();
+            let data = JSON.parse(txt); // Se falhar aqui, o PHP enviou lixo
 
-            try {
-                const res = await fetch('auth.php', { method: 'POST', body: JSON.stringify({ action, email, password }) });
-                const data = await res.json();
+            msgBox.innerHTML = '';
+            if(data.messages && data.messages.length) data.messages.forEach(m => addBubble(m.role, m.content));
+            else msgBox.innerHTML = '<div class="text-center text-muted mt-5">Inicie a conversa...</div>';
 
-                if (data.success) {
-                    loginModal.hide();
-                    loadChat();
-                } else {
-                    document.getElementById('auth-error').innerText = data.error;
-                }
-            } catch (e) {
-                document.getElementById('auth-error').innerText = "Erro de conexão.";
+            if(data.debug_mode) {
+                document.getElementById('debug-sidebar').style.display = 'block';
+                updateDebug(data);
             }
-        }
-        async function loadChat() {
-            try {
-                console.log("Iniciando carregamento..."); // Debug
-                const res = await fetch('api.php');
-                
-                // Se der erro de autenticação, mostra login
-                if (res.status === 401) {
-                    console.log("Não autorizado (401). Mostrando login.");
-                    return showLogin(); 
-                }
-
-                // Tenta ler o texto bruto antes do JSON para ver se tem erro PHP
-                const rawText = await res.text();
-                console.log("Resposta bruta do servidor:", rawText);
-
-                let data;
-                try {
-                    data = JSON.parse(rawText);
-                } catch (e) {
-                    console.error("Erro ao processar JSON. O servidor retornou HTML/Erro?", e);
-                    // Mostra alerta visual se o JSON estiver quebrado
-                    document.getElementById('chat-container').innerHTML = `<div class="alert alert-danger">Erro no servidor: Verifique o console (F12).</div>`;
-                    return;
-                }
-
-                // Se chegou aqui, o JSON é válido. Renderiza.
-                document.getElementById('user-email-display').innerText = data.email || 'Usuário';
-                
-                // Renderiza Mensagens
-                const container = document.getElementById('chat-container');
-                container.innerHTML = '';
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(msg => appendMessage(msg.role, msg.content));
-                } else {
-                    container.innerHTML = '<div class="text-muted text-center mt-5">Nenhuma conversa encontrada.</div>';
-                }
-
-                // Renderiza Debug
-                if (data.debug_mode) {
-                    document.getElementById('debug-panel').classList.remove('d-none');
-                    updateDebugPanel(data);
-                }
-                
-                scrollToBottom();
-
-            } catch (e) {
-                console.error("Erro fatal no loadChat:", e);
-            }
-        }
-
-        function appendMessage(role, text) {
-            const div = document.createElement('div');
-            div.className = `msg-bubble ${role === 'user' ? 'msg-user' : 'msg-bot'}`;
-            // Converte quebras de linha em <br> e formata markdown simples se necessário
-            div.innerHTML = text.replace(/\n/g, '<br>');
-            chatContainer.appendChild(div);
-        }
-
-        function scrollToBottom() {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        async function sendMessage() {
-            const text = userInput.value.trim();
-            if (!text) return;
-
-            appendMessage('user', text);
-            userInput.value = '';
-            userInput.disabled = true;
             scrollToBottom();
+        } catch(e) { console.error("Erro Load:", e); }
+    }
+
+    function updateDebug(data) {
+        document.getElementById('debug-facts').innerHTML = (data.debug_facts || []).map(f => `<div class="text-info mb-1">${f.key}: <span class="text-white">${f.value}</span></div>`).join('') || '<em class="text-muted">Vazio</em>';
+        document.getElementById('debug-tasks').innerHTML = (data.debug_tasks || []).map(t => `<div class="text-warning mb-1">• ${t.description}</div>`).join('') || '<em class="text-muted">Vazio</em>';
+    }
+
+    function addBubble(role, text) {
+        const div = document.createElement('div');
+        div.className = `msg ${role === 'user' ? 'msg-user' : 'msg-bot'}`;
+        div.innerHTML = text.replace(/\n/g, '<br>');
+        msgBox.appendChild(div);
+    }
+
+    function scrollToBottom() { msgBox.scrollTop = msgBox.scrollHeight; }
+
+    async function sendMessage() {
+        const inp = document.getElementById('user-input');
+        const txt = inp.value.trim();
+        if(!txt) return;
+
+        addBubble('user', txt);
+        inp.value = ''; inp.disabled = true;
+        document.getElementById('typing-indicator').style.display = 'block';
+        scrollToBottom();
+
+        try {
+            const res = await fetch('api.php', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: txt})
+            });
+            const data = await res.json();
             
-            // Mostra "Digitando..."
-            typingIndicator.style.display = 'block';
-
-            try {
-                const res = await fetch('api.php', { method: 'POST', body: JSON.stringify({ message: text }) });
-                const data = await res.json();
-
-                if (data.error) {
-                    appendMessage('assistant', "⚠️ Erro: " + data.error);
-                } else {
-                    appendMessage('assistant', data.reply);
-                    updateDebugPanel(data); // Atualiza lateral com dados frescos
-                }
-            } catch (e) {
-                appendMessage('assistant', "Erro fatal de conexão.");
-            } finally {
-                userInput.disabled = false;
-                typingIndicator.style.display = 'none';
-                userInput.focus();
-                scrollToBottom();
+            if(data.error) addBubble('bot', 'Erro: ' + data.error);
+            else {
+                addBubble('assistant', data.reply);
+                updateDebug(data);
             }
-        }
+        } catch(e) { addBubble('bot', 'Erro de conexão.'); }
+        
+        inp.disabled = false; inp.focus();
+        document.getElementById('typing-indicator').style.display = 'none';
+        scrollToBottom();
+    }
 
-        // --- Lógica de Atualização do Debug ---
-        function updateDebugPanel(data) {
-            // Facts
-            const factsDiv = document.getElementById('debug-facts');
-            if (data.debug_facts && data.debug_facts.length > 0) {
-                factsDiv.
+    document.getElementById('user-input').addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage() });
+    initChat();
+</script>
+</body>
+</html>
