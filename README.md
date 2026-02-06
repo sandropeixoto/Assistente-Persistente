@@ -13,6 +13,11 @@ Recursos
 --------
 - Memória Persistente: histórico salvo em database.sqlite
 - Contexto Configurável: envio das últimas mensagens para manter o contexto
+- Perfil Semântico: tags e resumos de sessão para personalização progressiva
+- Gestão de Tarefas Avançada: concluir/editar/priorizar/prazos por tool ou comando natural
+- Streaming de resposta (efeito de digitação no frontend)
+- Histórico por tópicos e busca no histórico
+- Edição de mensagem enviada
 - Interface simples: frontend direto
 - Compatível com APIs OpenAI/OLLama/OpenRouter etc.
 
@@ -28,13 +33,18 @@ Instalação
 2. Edite config.php para apontar a API e o modelo desejado
 3. Garanta permissões de escrita para o diretório (criando database.sqlite na primeira execução)
 
+4. Configure sua chave via variável de ambiente:
+```bash
+export ASSISTENTE_API_KEY="sk-..."
+```
+
 Configuração (exemplos)
 -------------------------
 Configuração básica para Ollama (local):
 ```php
 return [
-  'api_base_url' => 'http://localhost:11434/v1',
-  'api_key'      => 'ollama',
+  'api_url'       => 'http://localhost:11434/v1/chat/completions',
+  'api_key'       => 'ollama',
   'model'        => 'llama3',
   'context_limit'=> 10
 ];
@@ -42,9 +52,9 @@ return [
 Configuração para OpenAI (exemplo):
 ```php
 return [
-  'api_base_url' => 'https://api.openai.com/v1',
-  'api_key'      => 'sk-...'
-  'model'        => 'gpt-4o-mini',
+  'api_url'       => 'https://api.openai.com/v1/chat/completions',
+  'api_key'       => getenv('ASSISTENTE_API_KEY') ?: '',
+  'model'         => 'gpt-4o-mini',
   'context_limit'=> 10
 ];
 ```
@@ -70,3 +80,11 @@ Notas
 - Este código é recomendado apenas para desenvolvimento/local; para produção, implemente autenticação/validações de segurança adequadas.
 
 Observação: este README reflete o estado atual do repositório existente em /root/.openclaw/workspace/repos/Assistente-Persistente. Se desejar, posso estender com guias de contribuição, testes, ou scripts de setup automatizados.
+
+
+Comandos naturais de tarefas (exemplos)
+--------------------------------------
+- `marque tarefa 12 como concluída`
+- `defina prioridade da tarefa 7 para alta`
+- `defina prazo da tarefa 7 para 2026-02-20`
+- `editar tarefa 7: revisar proposta do cliente`
