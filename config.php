@@ -6,8 +6,9 @@ return [
     // ou '/responses' dependendo da versão do SDK. O padrão seguro é o abaixo.
     'api_url' => 'https://opencode.ai/zen/v1/chat/completions',
     
-    // Sua chave de API (Obtenha em opencode.ai/auth após rodar /connect)
-    'api_key' => 'sk-nhzogvPrZXkIvWRYQTiuSnaSHz3pl47c4mFl7fU7JAIvqGWI0a00045FqZeLPnFd',
+    // Sua chave de API (NUNCA versione chaves reais no repositório)
+    // Defina via variável de ambiente: export ASSISTENTE_API_KEY="sk-..."
+    'api_key' => getenv('ASSISTENTE_API_KEY') ?: '',
     
     // O modelo gratuito e rápido solicitado
     'model' => 'gpt-5-nano',
